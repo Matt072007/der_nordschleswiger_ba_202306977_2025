@@ -1,0 +1,281 @@
+---
+title: "2002_august_19_Der_Nordschleswiger"
+author: "Matti Munk Nielsen"
+date: "`r Sys.Date()`"
+output: html_document
+
+toc: true
+toc_float: true
+toc_depth: true
+---
+
+# Library
+### Her har jeg indlæst mine forskellige pakker via library funktionen.
+---
+```{r}
+library(tidyverse)
+library(readtext)
+library(tidytext)
+library(stopwords)
+library(ggwordcloud)
+library(dplyr)
+library(scales)
+library(pdftools)
+```
+# Read PDF
+
+### Her indlæses pdf af Der Nordschleswiger fra Der Nordschleswiger E-archiv. Den er fra den 19 august 2002. tibble(readtext)) gør at R-studio kan læse pdf filen og dermed avisen fra Der Nordschleswiger.
+```{r}
+testpdf <- tibble(readtext("PDF_Nordschleswiger_2002/*.pdf"))
+```
+# Textmining_Unnest
+
+### Her bliver Der_Nordschleswiger lavet af den downloadet pdf, testpdf som nu er blevet opdelt i mindre dele i stedet for at være en hel text. Dette er sket via unnest_tokens, som deler tekster op i mindre dele.
+```{r}
+Der_Nordschleswiger <- testpdf %>% 
+  unnest_tokens(word,text)
+```
+# Count words i Der_Nordschleswiger
+
+### Her bliver ordene fra Der_Nordschleswiger talt via count() funktionen.
+```{r}
+Der_Nordschleswiger %>% 
+  count(word,sort = TRUE)
+```
+# Stopwords
+
+### Her bliver stopordslisten stopwords_de lavet. tibble() gør, at jeg kan kan lave et datasæt med tyske stopord ved at indtaste i tibble(word=stopwords("de")).
+```{r}
+stopwords_de <- tibble(word=stopwords("de"))
+```
+# Filter stopwords
+
+### Her bliver Der Nordschleswiger_clean lavet ved, at man tager Der_Nordschleswiger og bruger anti_join til at fjerne ordene fra stopordslisten stopwords_de, fra kollonen word. by=. filter() gør dermed sammen med str_count(word)>3) at kun ord med 3 eller mere ord bliver talt fra Der_Nordschleswiger. count(word,sort = TRUE) er bare en optællings funktion, som tæller ordene efter filter() funktionen.
+```{r}
+ Der_Nordschleswiger_clean <- Der_Nordschleswiger%>% 
+  anti_join(stopwords_de, by="word") %>% 
+  filter(str_count(word)>3) %>% 
+  count(word,sort = TRUE)
+```
+
+
+# Fjern nontext 
+
+### Her bliver Final skabt ved at tage Der_Nordschleswiger_clean og ved at bruge filter, så er det nu muligt at fjerne numeriske værdier fra "Der Nordschleswiger" avis.
+```{r}
+Final <- Der_Nordschleswiger_clean %>% 
+  filter(is.na(as.numeric(word)))
+```
+
+# Top 100 Words
+
+### Her skaber jeg Final_100, som er de 100 første ord. head gør at der tages de første 100 ord.
+
+```{r}
+ Final_100 <- Final %>%
+  head(100)
+```
+
+
+
+
+# Word_Cloud_Nordschleswiger
+
+### ggplot gør, at jeg kan tage Final_100 og lave det til en graf, hvor aes gør sammen med label, at den tager word fra Final_100. size = n gør, at grafen vokser afhængig af hyppigheden for ordene fra Final_100. geom_text_wordcloud_area gør, at jeg kan bestemme formen for grafen med shape og at farve via color er afhænig af n. scale_size_area er, hvor jeg bestemmer, hvad maxs størelsen for min graf må være afhængig af et ords fremkomst. scale_color_gradientn gør, at jeg kan bestemme hvilken farve et ord får afhængig af dens hyppighed. theme_minimal gør min graf mere synlig uden en forstyrelse fra baggrunden.
+
+```{r}
+ggplot(data = Final_100, aes(label = word, size = n)) + 
+  geom_text_wordcloud_area(aes(color = n), shape = "diamond") +
+  scale_size_area(max_size = 12) +
+  scale_color_gradientn(colors = c("black", "yellow", "red")) +
+  theme_minimal()
+```
+# Gem Graf
+### ggsave gør at jeg kan gemme min grafer som png.fil. widht bestemmer breden af billedet. hight bestemmer højden på billedet og dpi bestemmer detaljegraden på billedet.
+```{r}
+ggsave("cloud_2002_august_19_Der_Nordschleswiger.png", width = 6, height = 4, dpi = 300)
+```
+
+
+
+# Sentiment analysis
+
+
+# Negative ord
+
+
+### Her indlæses data fra den semantiske fil SentiWS_V2.0_Negative.txt via funktionen read.table.
+
+```{r}
+negativ <- read.table("C:/Users/Asus PC/Desktop/Semantisk_Analyse_Nordschleswiger/SentiWS_v2.0/SentiWS_v2.0_Negative.txt" , fill = TRUE)
+```
+
+# Først adskiller vi ordnene i V1
+
+### Her bliver neg1 skabt. select gør at vi kun unytter kolonnerne V1 og V2. mutate(V1 = as.character(V1)) gør at man derefter ved mutate(V1 = sub("\\|.*","\\",V1)) nu kan rette på V1 efter|. colnames gør, at navnene på kollonerne bliver "word" og "sentiment".
+
+```{r}
+neg1 <- negativ %>% 
+  select(V1, V2) %>% 
+  mutate(V1 = as.character(V1)) %>% 
+  mutate(V1 = sub("\\|.*","\\",V1)) %>% 
+  `colnames<-`(c("word", "sentiment"))
+```
+
+# Adskiller vi ordnene i V2
+
+### strsplit(as.character(negativ$V3), split = ",") gør at de ord, som er listed bliver adskilt. data.frame(V1 = rep(negativ$V2, sapply(Single_negativ, length)), V3 = unlist(Single_negative)) gør at værdierne fra negativ$V3 bliver sat sammen med værdierne fra negativ$V2. colnames gør at kolonnerne blive omdøbt til sentiment og word.
+```{r}
+Single_negativ <- strsplit(as.character(negativ$V3), split = ",")
+neg2 <- data.frame(V1 = rep(negativ$V2, sapply(Single_negativ, length)), V3 = unlist(Single_negativ)) %>%
+  `colnames<-`(c("sentiment", "word"))
+
+```
+
+# Positive ord
+
+### Her indlæses data fra den semantiske fil SentiWS_V2.0_Positive.txt via funktionen read.table.
+
+```{r}
+positiv <- read.table("C:/Users/Asus PC/Desktop/Semantisk_Analyse_Nordschleswiger/SentiWS_v2.0/SentiWS_v2.0_Positive.txt", fill = TRUE)
+```
+
+# Først seperere vi ordene for V1
+
+### Her bliver pos1 skabt. select gør var vi kun benytter kolonnerne V1 og V2. Mutate(V1 = as.character(V1)) gør at man derefter ved mutate(V1 = sub("\\|.*","\\",V1)) nu kan rette på V1 efter|. colnames gør at navnene på kollonerne bliver word og sentiment.
+
+```{r}
+pos1 <- positiv%>%
+  select(V1, V2) %>% 
+  mutate(V1 = as.character(V1)) %>%
+  mutate(V1 = sub("\\|.*","\\",V1)) %>%
+  `colnames<-`(c("word", "sentiment"))
+```
+
+# Nu seperere vi ordene i V2
+
+### strsplit(as.character(positiv$V3), split = ",") gør at de ord som er listed bliver adskilt. data.frame(V1 = rep(positiv$V2, sapply(Single_positiv, length)), V3 = unlist(Single_positive)) gør at værdierne fra positiv$V3 bliver sat sammen med værdierne fra positiv$V2. colnames gør at kolloonnerne blive omdøbt til sentiment og word.
+```{r}
+Single_positiv <- strsplit(as.character(positiv$V3), split = ",")
+pos2 <- data.frame(V1 = rep(positiv$V2, sapply(Single_positiv, length)), V3 = unlist(Single_positiv)) %>%
+  `colnames<-`(c("sentiment", "word"))
+```
+
+# Samlet leksicon for positiv og negativ
+
+### Her bliver SentiWS_df skabt. rbind finder data sættene neg1,neg2,pos1,pos2, mens mutate ændrer Polarität til enten "negative" eller "positive". mutate("word" = as.character(word)) gør at alle værdier under "word" har samme værditype. SentiWS_df[!duplicated(SentiWS_df$word),] gør at ord kun forekommer en gang og ikke flere gange fra sentementalitetpakkerne.
+
+```{r}
+SentiWS_df <- rbind(neg1 %>% 
+                      mutate(Polarität = "negative"),
+                    neg2 %>% 
+                      mutate(Polarität = "negative"),
+                    pos1 %>% 
+                      mutate(Polarität = "positive"), 
+                    pos2 %>% 
+                       mutate(Polarität = "positive")) %>%
+  mutate("word" = as.character(word))
+SentiWS_df <- SentiWS_df[!duplicated(SentiWS_df$word),]
+  
+
+```
+
+
+# Match kolonnen word med Final
+
+### Her bliver Sentiment_Nordschleswiger skabt, som er produktet er SentiWS_df, som er den tyske semantik pakke skabt ovenover for både positiv og negativ sentimentalitet. Sentiws_df bliver så af left_join matchet med Final´s kolonner som har navnet word siden by matcher SentiWS_df og Final kollonner med navn word pga. funktionen by.
+
+```{r}
+Sentiment_Nordschleswiger <- SentiWS_df %>% 
+  left_join(Final, by="word")
+```
+
+# Match kolonnen word med SentiWS_df
+
+### Her bliver Words_N lavet. Her tages Final, som er det endelige produkt fra textminingen. Final bliver nu af left_join forbundet med de højrekollenner fra den tyske sentimantalitetpakke SentiWS_df, og by = "word" gør at alt hvad, der er i kollenerne word i Final og SentiWS bliver matchet.
+
+```{r}
+Words_N <- Final %>% 
+  left_join(SentiWS_df, by="word")
+```
+
+# Forbind og tæl sentimantalitet af Der Nordschleswiger
+
+### Her bliver Count_Sentiment skabt. inner_join forbinder mine to datasæt Words_N og Sentiment_Nordschleswiger til et datasæt.
+
+```{r}
+Count_Sentiment <- inner_join(Words_N , Sentiment_Nordschleswiger )
+```
+
+# Mængde af Polarität i Der Nordschleswiger
+
+### ggplot() gør at jeg kan plotte data fra Count_Sentiment i en graf, hvor aes i forlængelse gør, at jeg kan gøre at x-aksen er Polarität, og y-aksen er n. geom_col gør at værdierne bliver vist som søjler.
+
+```{r}
+ggplot(data = Count_Sentiment, aes(x = Polarität, y = n)) +
+  geom_col()
+```
+# Gem Graf
+```{r}
+ggsave("Polarität_2002_august_19_Der_Nordschleswiger.png", width = 6, height = 4, dpi = 300)
+```
+
+# Hyppighed af ord og negativ sentimentalitet i Der Nordschleswiger
+
+### Count_Sentiment bliver af slice_min,n=50 sorteret efter de 50 hyppist forkomne negative sentiments fra Count_Sentiment. mutate ændre kolonner i grafen, så word og sentiment bliver reorganiseret. ggplot() gør, at jeg kan bestemme, hvad x-aksen og y-aksen på grafen skal være af værdi. geom_col() skaber søjler, som afspejler værdierne i grafen. coord_flip() gør at søjlerne kommer fra y-aksen, men de vokser langs x-aksen. theme_bw() gør at grafens baggrund er lysere. scale_y_reverse gør, at værdierne bliver vist fra høj til lav, hvor den højeste værdi bliver vist nederst og den laveste værdi øverst.
+```{r}
+Count_Sentiment %>% 
+  slice_min(sentiment, n = 50) %>% 
+  mutate(word = reorder(word, sentiment)) %>%
+  ggplot(aes(x = word, y = sentiment)) +
+  geom_col() +
+  coord_flip()+
+  theme_bw() +
+  scale_y_reverse()
+  
+```
+# Gem graf
+```{r}
+ggsave("negativ_2002_august_19_Der_Nordschleswiger.png", width = 6, height = 4, dpi = 300)
+```
+
+
+
+# Hyppighed af ord og positiv sentimentalitet i Der Nordschleswiger
+
+### Count_Sentiment bliver af slice_max, n=50 sorteret efter de 50 hyppist forkomne positive sentiments fra Count_Sentiment. mutate ændre kolonner i grafen så word og sentiment bliver reorganiseret. ggplot() gør, at jeg kan bestemme hvad x-aksen og y-aksen på grafen skal være af værdi. geom_col() skaber søjler som afspejler værdierne i grafen. coord_flip() gør at søjlerne kommer fra y-aksen men de vokser langs x-aksen. theme_bw() gør at grafens baggrund er lysere. Her bliver den højeste værdi vist øvest og den laveste værdi nederst.
+
+```{r}
+Count_Sentiment %>% 
+  slice_max(sentiment, n = 50) %>% 
+  mutate(word = reorder(word, sentiment)) %>%
+  ggplot(aes(x = word, y = sentiment)) +
+  geom_col() +
+  coord_flip()+
+  theme_bw()
+  
+```
+
+# Gem graf
+```{r}
+ggsave("positive_2002_august_19_Der_Nordschleswiger.png", width = 6, height = 4, dpi = 300)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
